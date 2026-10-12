@@ -50,6 +50,22 @@ th{cursor:pointer;color:var(--mut);font-weight:600;position:sticky;top:0;backgro
 .tw{max-height:420px;overflow:auto}
 .bar{display:inline-block;height:6px;border-radius:3px;background:var(--acc);vertical-align:middle;margin-left:6px}
 tr.sel td{background:var(--chip)}
+.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+#printMeta{display:none}
+body.printing main{width:1040px;max-width:none;margin:0 auto;padding:0}
+body.printing .c7{grid-column:span 7}body.printing .c5{grid-column:span 5}body.printing .c6{grid-column:span 6}body.printing .c12{grid-column:span 12}
+body.printing{--bg:#fff;--card:#fff;--ink:#14212e;--mut:#5b6b7a;--line:#dde3e9;--acc:#0b6fa4;--acc2:#e07a1f;--chip:#eaf1f6;--nofill:#d5dbe0}
+@media print{
+ @page{size:A4 landscape;margin:8mm}
+ body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ header,.controls,#tableCard,.leaflet-control-zoom{display:none!important}
+ #printMeta{display:block;margin:0 0 8px}
+ #printMeta h1{font-size:18px;margin:0}
+ #printMeta div{font-size:12px;color:#5b6b7a}
+ .card{break-inside:avoid;page-break-inside:avoid}
+ .kpis{grid-template-columns:repeat(5,1fr)}
+ .foot{display:block}
+}
 .foot{color:var(--mut);font-size:12px;margin-top:14px}
 .leaflet-container{font:inherit}
 </style>
@@ -60,6 +76,7 @@ tr.sel td{background:var(--chip)}
 <div class="sub">Regiones Caribe y Pacífica de Colombia · 180 municipios · 9 departamentos</div>
 </header>
 <main>
+<div id="printMeta"></div>
 <div class="card controls">
   <label>Variable del mapa y rankings
     <span class="seg" id="metric"><button data-m="ai" class="on">Área inundada (ha)</button><button data-m="p">% del municipio</button></span>
@@ -69,18 +86,11 @@ tr.sel td{background:var(--chip)}
     <select id="topn"><option>10</option><option selected>15</option><option>20</option><option>30</option></select>
   </label>
   <label>Buscar municipio<input type="search" id="q" placeholder="Ej. Montería"></label>
-  <label>Mapa base<select id="base">
-  <option value="osm">Calles (OpenStreetMap)</option>
-  <option value="positron">Claro minimalista (CARTO)</option>
-  <option value="dark">Oscuro (CARTO)</option>
-  <option value="sat">Satélite (Esri)</option>
-  <option value="topo">Topográfico (OpenTopoMap)</option>
-  <option value="esritopo">Relieve y calles (Esri)</option>
-  <option value="none">Sin mapa base</option>
-</select></label>
+  
   <label>Opacidad del relleno<input type="range" id="op" min="20" max="100" value="88"></label>
 
   <button class="btn" id="reset">Limpiar filtros</button>
+  <button class="btn pri" id="pdf" title="Abre el diálogo de impresión; elige «Guardar como PDF»">⬇ Descargar PDF</button>
 </div>
 
 <div class="kpis" id="kpis"></div>
@@ -120,7 +130,7 @@ tr.sel td{background:var(--chip)}
     <div class="chartbox s"><canvas id="chScatter"></canvas></div>
   </div>
 
-  <div class="card c12">
+  <div class="card c12" id="tableCard">
     <h2>Tabla de municipios</h2>
     <div class="hint">Clic en el encabezado para ordenar · clic en una fila para ubicarla en el mapa</div>
     <div class="tw"><table id="tbl"></table></div>
@@ -147,23 +157,9 @@ const mval=r=>st.m==='ai'?r.ai:r.p;
 
 /* ---------- Mapa ---------- */
 const map=L.map('map',{zoomSnap:.25}).setView([9.3,-75.5],7);
-const BASES={
- osm:['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}],
- positron:['https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}],
- dark:['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}],
- sat:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:18}],
- topo:['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{attribution:'© OpenTopoMap (CC-BY-SA)',maxZoom:17}],
- esritopo:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:18}]
-};
-let tiles=null,fillOp=.88;
-function setBase(k){
-  if(tiles){map.removeLayer(tiles);tiles=null}
-  if(BASES[k]){tiles=L.tileLayer(BASES[k][0],BASES[k][1]).addTo(map);tiles.bringToBack()}
-  document.getElementById('map').style.background=k==='dark'?'#1b2631':css('--nofill');
-}
-document.getElementById('base').onchange=e=>setBase(e.target.value);
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri — Esri, Maxar, Earthstar Geographics, and the GIS User Community',maxZoom:18}).addTo(map);
+let fillOp=.88;
 document.getElementById('op').oninput=e=>{fillOp=e.target.value/100;paintMap()};
-setBase('osm');
 const RAMP=['#d7ecf7','#a9d3ec','#6fb3dd','#3b8fc4','#1b67a1','#0a3f6e'];
 let breaks=[];
 function computeBreaks(){
@@ -298,6 +294,30 @@ document.querySelectorAll('#metric button').forEach(b=>b.onclick=()=>{
 document.getElementById('topn').onchange=e=>{st.topn=+e.target.value;updateCharts()};
 document.getElementById('q').oninput=e=>{st.q=e.target.value.trim();refresh(false)};
 document.getElementById('reset').onclick=()=>{st.deps.clear();st.q='';st.sel=null;document.getElementById('q').value='';document.getElementById('info').innerHTML='';refresh(false);map.flyToBounds(gl.getBounds(),{duration:.6})};
+/* ---------- Exportar a PDF ---------- */
+function buildMeta(){
+  const f=[];
+  f.push('Variable del mapa: '+mlabel());
+  f.push('Departamentos: '+(st.deps.size?[...st.deps].join(', '):'todos'));
+  if(st.q)f.push('Búsqueda: «'+st.q+'»');
+  if(st.sel!==null)f.push('Municipio seleccionado: '+rows[st.sel].m+' ('+rows[st.sel].d+')');
+  document.getElementById('printMeta').innerHTML='<h1>Áreas inundadas por municipio · Frente frío, febrero 2026</h1><div>'+f.join(' · ')+' · Generado el '+new Date().toLocaleString('es-CO')+'</div>';
+}
+function relayout(){map.invalidateSize();Object.values(charts).forEach(c=>c.resize())}
+let printing=false;
+function exportPdf(){
+  if(printing)return;printing=true;
+  const btn=document.getElementById('pdf');btn.textContent='Preparando PDF…';
+  buildMeta();document.body.classList.add('printing');relayout();
+  const go=()=>{relayout();setTimeout(()=>{window.print()},300)};
+  let done=false;const fire=()=>{if(!done){done=true;go()}};
+  sat.once('load',fire);setTimeout(fire,1800);
+}
+function endPrint(){document.body.classList.remove('printing');printing=false;document.getElementById('pdf').textContent='⬇ Descargar PDF';relayout()}
+window.addEventListener('afterprint',endPrint);
+document.getElementById('pdf').onclick=exportPdf;
+window.addEventListener('beforeprint',()=>{buildMeta();relayout()});
+
 matchMedia('(prefers-color-scheme:dark)').onchange=()=>location.reload();
 
 computeBreaks();initCharts();refresh(false);
